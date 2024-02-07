@@ -46,4 +46,3 @@ model apply [from] clip$:
 # Shows the list of available prompts
 model help$:
     user.gpt_help()
-
