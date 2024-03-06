@@ -18,9 +18,9 @@ model fix message$:
     edit.select_all()
     text = edit.selected_text()
     result = user.gpt_apply_prompt("Fix any mistakes or irregularities in grammar, spelling, or formatting. Keep the language the text currently is written in. The text was created used voice dictation. Thus, there is likely to be issues regarding homophones and other misrecognitions. Do not change the tone. Do not change the original structure of the text.", text)
+    #Can one write a prompt so GPT doesn't overuse commas and end the text with a `.`? GPT makes it too formal...
     user.paste(result)
     user.select_left_and_check(".")
-    #Can one write a prompt so GPT doesn't overuse commas and end the text with a `.`? Makes it too formal...
 
 # Runs a model prompt on the selected text and sets the result to the clipboard
 model clip {user.staticPrompt}$:
