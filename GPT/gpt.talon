@@ -1,5 +1,4 @@
 mode: command
-
 -
 
 # Ask a question in the voice command and the AI will answer it.
@@ -44,5 +43,4 @@ model apply [from] clip$:
     user.paste(result)
 
 # Shows the list of available prompts
-model help$:
-    user.gpt_help()
+model help$: user.gpt_help()

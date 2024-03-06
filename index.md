@@ -1,4 +1,13 @@
-# Talon-AI-Tools
+<!-- This document is used for generating the docs, with this index.md being the docs root -->
+
+# Talon-AI-Tools Documentation
+
+:::{toctree}
+:maxdepth: 1
+docs/index.md
+:::
+
+## About
 
 Use large language models and AI tools alongside Talon. Currently supports:
 
@@ -9,6 +18,6 @@ Use large language models and AI tools alongside Talon. Currently supports:
 
 These tools are helpful to automatically generate text, fix errors in dictation, and generally speed up your Talon workflow.
 
-## Help and Setup:
+## Authors
 
-See the readme in each folder for more information on how to set up and use each tool.
+This repository contains code from {{author}}

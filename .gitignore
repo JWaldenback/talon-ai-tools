@@ -1,1 +1,6 @@
+gpt-settings.talon
+# TalonDoc
+/docs/_build
+
+# My customization
 /api_key.py
