@@ -25,6 +25,8 @@ ctx.lists["user.makeshift_destination"] = {
     "before": "editNewLineBefore",
 }
 
+mod.tag("codeium", desc="Enable codeium for copilot integration")
+
 
 @mod.action_class
 class Actions:
@@ -66,7 +68,7 @@ class Actions:
         for _ in range(count):
             actions.user.vscode(action)
 
-    def copilot_bring_code_block(index: int):
+    def copilot_bring_code_block(index: int) -> None:
         """Bring a copilot chat suggestion to the cursor"""
         actions.user.copilot_focus_code_block(index)
         actions.user.vscode("workbench.action.chat.insertCodeBlock")

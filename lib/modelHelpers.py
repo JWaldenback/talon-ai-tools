@@ -1,21 +1,32 @@
+import base64
 import os
 import platform
 import re
 from typing import Optional, Tuple
 
-from talon import actions, app, settings
+from talon import actions, app, clip, settings
 
-from .types import Data, Headers, Tool
+from .modelTypes import Data, Headers, Tool
 
 
 def notify(message: str):
     """Send a notification to the user. Defaults the Andreas' notification system if you have it installed"""
     try:
         actions.user.notify(message)
-    except:
+    except Exception:
         app.notify(message)
     # Log in case notifications are disabled
     print(message)
+
+
+def get_token() -> str:
+    """Get the OpenAI API key from the environment"""
+    try:
+        return os.environ["OPENAI_API_KEY"]
+    except KeyError:
+        message = "GPT Failure: env var OPENAI_API_KEY is not set."
+        notify(message)
+        raise Exception(message)
 
 
 def generate_payload(
@@ -26,12 +37,7 @@ def generate_payload(
     """
     notify("GPT Task Started")
 
-    try:
-        TOKEN = os.environ["OPENAI_API_KEY"]
-    except KeyError:
-        message = "GPT Failure: env var OPENAI_API_KEY is not set."
-        notify(message)
-        raise Exception(message)
+    TOKEN = get_token()
 
     language = actions.code.language()
     additional_context = (
@@ -78,3 +84,17 @@ def remove_wrapper(text: str):
         regex = r'[^"]+"([^"]+)"'
     match = re.search(regex, text)
     return match.group(1) if match else text
+
+
+def get_clipboard_image():
+    try:
+        clipped_image = clip.image()
+        if not clipped_image:
+            raise Exception("No image found in clipboard")
+
+        data = clipped_image.encode().data()
+        base64_image = base64.b64encode(data).decode("utf-8")
+        return base64_image
+    except Exception as e:
+        print(e)
+        raise Exception("Invalid image in clipboard")

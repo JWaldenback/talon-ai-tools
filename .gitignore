@@ -1,6 +1,10 @@
 gpt-settings.talon
 # TalonDoc
 /docs/_build
+.ruff_cache/
+.mypy_cache/
+
+
 
 # My customization
 /api_key.py

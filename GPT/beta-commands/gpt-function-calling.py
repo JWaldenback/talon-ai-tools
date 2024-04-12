@@ -1,12 +1,11 @@
 import json
-import os
 from typing import Any, Optional
 
 import requests
-from talon import Module, actions, settings
+from talon import Module, actions
 
-from ..lib.gpt_helpers import generate_payload, notify
-from ..lib.types import ChatCompletionResponse, InsertOption, Message
+from ...lib.modelHelpers import generate_payload, notify
+from ...lib.modelTypes import ChatCompletionResponse, InsertOption, Message
 from .gpt_callables import (
     display_response,
     function_specs,
@@ -24,7 +23,6 @@ def gpt_function_query(
     insert_response: InsertOption = InsertOption.PASTE,
     cursorless_destination: Optional[Any] = None,
 ) -> None:
-
     # Function calling likely to not be supported in local models so better to use OpenAI
     url = "https://api.openai.com/v1/chat/completions"
 
