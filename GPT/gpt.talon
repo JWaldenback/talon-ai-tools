@@ -4,9 +4,9 @@ model ask <user.text>$:
     user.paste(result)
 
 # Runs a model prompt on the selected text and pastes the result.
-model {user.staticPrompt}$:
+model <user.modelPrompt> [this]$:
     text = edit.selected_text()
-    result = user.gpt_apply_prompt(user.staticPrompt, text)
+    result = user.gpt_apply_prompt(modelPrompt, text)
     user.paste(result)
 
 # Selects all text and runs a model prompt on the selected text and pastes the result.
@@ -19,9 +19,9 @@ model fix message$:
     user.select_left_and_check(".")
 
 # Runs a model prompt on the selected text and sets the result to the clipboard
-model clip {user.staticPrompt}$:
+model clip <user.modelPrompt> [this]$:
     text = edit.selected_text()
-    result = user.gpt_apply_prompt(user.staticPrompt, text)
+    result = user.gpt_apply_prompt(modelPrompt, text)
     clip.set_text(result)
 
 # Say your prompt directly and the AI will apply it to the selected text
