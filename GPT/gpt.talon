@@ -1,20 +1,19 @@
-# Ask a question in the voice command and the AI will answer it.
+# Ask a question in the voice command and the model will answer it.
 model ask <user.text>$:
     result = user.gpt_answer_question(text)
     user.paste(result)
 
-# Runs a model prompt on the selected text and pastes the result.
-model <user.modelPrompt> [this]$:
+# Runs a model prompt on the selected text; pastes or inserts via the specified method
+model <user.modelPrompt> [this] [{user.modelInsertionMethod}]$:
     text = edit.selected_text()
     result = user.gpt_apply_prompt(modelPrompt, text)
-    user.paste(result)
+    user.gpt_insert_response(result, modelInsertionMethod or "")
 
 # Selects all text and runs a model prompt on the selected text and pastes the result.
 model fix message$:
     edit.select_all()
     text = edit.selected_text()
-    result = user.gpt_apply_prompt("Fix any mistakes or irregularities in grammar, spelling, or formatting. Keep the language the text currently is written in. The text was created used voice dictation. Thus, there is likely to be issues regarding homophones and other misrecognitions. Do not change the tone. Do not change the original structure of the text.", text)
-    #Can one write a prompt so GPT doesn't overuse commas and end the text with a `.`? GPT makes it too formal...
+    result = user.gpt_apply_prompt("Fix any mistakes or irregularities in grammar, spelling, or formatting. Keep the language the text currently is written in. The text was created used voice dictation. Thus, there is likely to be issues regarding homophones and other misrecognitions. Do not change the tone. Do not change the original structure of the text.", text) #Can one write a prompt so GPT doesn't overuse commas and end the text with a `.`? GPT makes it too formal...
     user.paste(result)
     user.select_left_and_check(".")
 
@@ -24,12 +23,12 @@ model clip <user.modelPrompt> [this]$:
     result = user.gpt_apply_prompt(modelPrompt, text)
     clip.set_text(result)
 
-# Say your prompt directly and the AI will apply it to the selected text
-model please <user.text>$:
+# Runs a command on the selected text; pastes or inserts via the specified method
+model please <user.text> [{user.modelInsertionMethod}]$:
     prompt = user.text
     txt = edit.selected_text()
     result = user.gpt_apply_prompt(prompt, txt)
-    user.paste(result)
+    user.gpt_insert_response(result, modelInsertionMethod or "")
 
 # Applies an arbitrary prompt from the clipboard to selected text and pastes the result.
 # Useful for applying complex/custom prompts that need to be drafted in a text editor.

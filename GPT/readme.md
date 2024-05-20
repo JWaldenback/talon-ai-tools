@@ -6,31 +6,19 @@ Query language models with voice commands. Helpful to automatically generate tex
 
 | Command                                                       | Description                                                          | Example                                       |
 | ------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------- |
-| `model ask <text>`                                            | Ask a question to the model                                          | "model ask what is the meaning of life"       |
 | `model <prompt>`                                              | Generate text from a prompt and paste it                             | "model summarize"                             |
-| `model clip <prompt>`                                         | Generate text from a prompt and set it on the clipboard              | "model clip summarize"                        |
 | `model help`                                                  | Show the help menu with all the prompts                              | "model help"                                  |
 | `model please <text>`                                         | Say an arbitrary prompt and then apply it                            | "model please translate this to Japanese"     |
+| `model ask <text>`                                            | Ask a question to the model                                          | "model ask what is the meaning of life"       |
 | `model <prompt> <cursorless_target> <cursorless_destination>` | Select with cursorless, apply a prompt, and paste to the destination | "model explain line this after block red air" |
+| `model <prompt> below`                                        | Apply a prompt and then paste the result below the cursor            | "model format bullets below"                  |
+| `model <prompt> clipped`                                      | Apply a prompt and return the result in the clipboard                | "model explain this clipped"                  |
 
 ## Help
 
 - See [the list of prompts](./staticPrompt.talon-list) for all the prompts that can be used with the `model` command.
 
 - See the [examples file](usage-examples/examples.md) for gifs that show how to use the commands.
-
-## Setup
-
-In order to use this repository with GPT 3.5, you need to [create an OpenAI API key](https://platform.openai.com/signup).
-
-- Once you get the key, set the environment variable within a Python file anywhere in your Talon user directory.
-- **Make sure you do not push the key to a public repo!**
-
-```python
-import os
-
-os.environ["OPENAI_API_KEY"] = "YOUR-KEY-HERE"
-```
 
 ## OpenAI API Pricing
 
