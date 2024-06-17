@@ -3,27 +3,17 @@ model ask <user.text>$:
     result = user.gpt_answer_question(text)
     user.paste(result)
 
-# Runs a model prompt on the selected text; pastes or inserts via the specified method
+# Runs a model prompt on the selected text; inserts with paste by default
+#   Example: `model fix grammar below`
+#   Example: `model explain this`
 model <user.modelPrompt> [this] [{user.modelInsertionMethod}]$:
     text = edit.selected_text()
     result = user.gpt_apply_prompt(modelPrompt, text)
     user.gpt_insert_response(result, modelInsertionMethod or "")
 
-# Selects all text and runs a model prompt on the selected text and pastes the result.
-model fix message$:
-    edit.select_all()
-    text = edit.selected_text()
-    result = user.gpt_apply_prompt("Fix any mistakes or irregularities in grammar, spelling, or formatting. Keep the language the text currently is written in. The text was created used voice dictation. Thus, there is likely to be issues regarding homophones and other misrecognitions. Do not change the tone. Do not change the original structure of the text.", text) #Can one write a prompt so GPT doesn't overuse commas and end the text with a `.`? GPT makes it too formal...
-    user.paste(result)
-    user.select_left_and_check(".")
-
-# Runs a model prompt on the selected text and sets the result to the clipboard
-model clip <user.modelPrompt> [this]$:
-    text = edit.selected_text()
-    result = user.gpt_apply_prompt(modelPrompt, text)
-    clip.set_text(result)
-
-# Runs a command on the selected text; pastes or inserts via the specified method
+# Runs an arbitrary prompt on the selected text; inserts with paste by default
+#   Example: `model please translate this into English`
+#   Example: `model please reformat this code in a more imperative style clipped`
 model please <user.text> [{user.modelInsertionMethod}]$:
     prompt = user.text
     txt = edit.selected_text()
@@ -45,3 +35,11 @@ model help$: user.gpt_help()
 model [nope] that was <user.text>$:
     result = user.gpt_reformat_last(text)
     user.paste(result)
+    
+# Selects all text and runs a model prompt on the selected text and pastes the result.
+model fix message$:
+    edit.select_all()
+    text = edit.selected_text()
+    result = user.gpt_apply_prompt("Fix any mistakes or irregularities in grammar, spelling, or formatting. Keep the language the text currently is written in. The text was created used voice dictation. Thus, there is likely to be issues regarding homophones and other misrecognitions. Do not change the tone. Do not change the original structure of the text.", text)
+    user.paste(result)
+    user.select_left_and_check(".")
