@@ -4,13 +4,25 @@ app: vscode
 # can't match on user.cursorless without ORing the gpt.beta tag, so just match on vscode
 -
 
-# Apply a prompt to any text, and output it any target
-^model please <user.modelPrompt> <user.cursorless_target> [<user.cursorless_destination>]$:
-    text_list = user.cursorless_get_text_list(cursorless_target)
-    default_destination = user.cursorless_create_destination(cursorless_target)
-    user.gpt_dynamic_request_cursorless(user.modelPrompt, text_list, cursorless_destination or default_destination)
+# Model Blend
+# Combines source texts with a destination, preserving some of the destination's structure.
+# ## Use Cases
+# - Merging sentences
+# - Adding types to a definition
+# - Combining a template test with another, including comments for modifications
+# - Prototyping the combination of two functions to see what a refactor would look like
+# ## Example
+# `model blend block this to block next`
+model blend <user.cursorless_target> to <user.cursorless_target>:
+    target_text = user.cursorless_get_text_list(cursorless_target_1)
+    destination_text = user.cursorless_get_text(cursorless_target_2)
+    default_destination = user.cursorless_create_destination(cursorless_target_2)
+    result = user.gpt_blend_list(target_text, destination_text)
+    user.cursorless_insert(default_destination, result)
 
-^model please <user.text> <user.cursorless_target> [<user.cursorless_destination>]$:
-    text_list = user.cursorless_get_text_list(cursorless_target)
+model blend clip to <user.cursorless_target>:
+    clipboard_text = clip.text()
+    destination_text = user.cursorless_get_text(cursorless_target)
     default_destination = user.cursorless_create_destination(cursorless_target)
-    user.gpt_dynamic_request_cursorless(user.text, text_list, cursorless_destination or default_destination)
+    result = user.gpt_blend(clipboard_text, destination_text)
+    user.cursorless_insert(default_destination, result)
