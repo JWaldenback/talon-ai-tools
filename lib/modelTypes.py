@@ -1,35 +1,12 @@
-import enum
-from typing import Optional, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 
-class FunctionArguments(TypedDict):
-    name: str
-    arguments: str
+class GPTMessageItem(TypedDict):
+    type: Literal["text", "image_url"]
+    text: NotRequired[str]
+    image_url: NotRequired[dict[Literal["url"], str]]
 
 
-class ToolCall(TypedDict):
-    function: FunctionArguments
-
-
-class Message(TypedDict):
-    content: Optional[str]
-    tool_calls: list[ToolCall]
-
-
-class Choice(TypedDict):
-    message: Message
-
-
-class ChatCompletionResponse(TypedDict):
-    choices: list[Choice]
-
-
-class InsertOption(enum.Enum):
-    PASTE = enum.auto()
-    CURSORLESS = enum.auto()
-    KEY_PRESSES = enum.auto()
-
-
-Headers = dict[str, str]
-Data = dict[str, str]
-Tool = dict[str, str]
+class GPTMessage(TypedDict):
+    role: Literal["user", "system", "assistant"]
+    content: list[GPTMessageItem]
