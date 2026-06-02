@@ -1,10 +1,14 @@
 import base64
 import json
+import logging
 import os
-from typing import Literal, Optional
+import platform
+import subprocess
+from pathlib import Path
+from typing import IO, Any, Literal, NotRequired, Optional, TypedDict
 
 import requests
-from talon import actions, app, clip, settings
+from talon import actions, app, clip, resource, settings
 
 from ..lib.pureHelpers import strip_markdown
 from .modelState import GPTState
@@ -15,6 +19,76 @@ All functions in this this file have impure dependencies on either the model or 
 """
 
 
+# TypedDict definition for model configuration
+class ModelConfig(TypedDict):
+    name: str
+    model_id: NotRequired[str]
+    system_prompt: NotRequired[str]
+    llm_options: NotRequired[dict[str, Any]]
+    api_options: NotRequired[dict[str, Any]]
+
+
+# Path to the models.json file
+MODELS_PATH = Path(__file__).parent.parent / "models.json"
+
+# Store loaded model configurations
+model_configs: dict[str, ModelConfig] = {}
+
+
+def load_model_config(f: IO) -> None:
+    """
+    Load model configurations from models.json
+    """
+    global model_configs
+    try:
+        content = f.read()
+        configs = json.loads(content)
+        # Convert list to dictionary with name as key
+        model_configs = {config["name"]: config for config in configs}
+    except Exception as e:
+        notify(f"Failed to load models.json: {e!r}")
+        model_configs = {}
+
+
+def ensure_models_file_exists():
+    if not MODELS_PATH.exists():
+        with open(MODELS_PATH, "w") as f:
+            f.write("[]")
+
+
+ensure_models_file_exists()
+
+
+# Set up file watcher to reload configuration when models.json changes
+@resource.watch(str(MODELS_PATH))
+def on_update(f: IO):
+    load_model_config(f)
+
+
+def resolve_model_name(model: str) -> str:
+    """
+    Get the actual model name from the model list value.
+    """
+    if model == "model":
+        # Check for deprecated setting first for backward compatibility
+        openai_model: str = settings.get("user.openai_model")  # type: ignore
+        if openai_model != "do_not_use":
+            logging.warning(
+                "The setting 'user.openai_model' is deprecated. Please use 'user.model_default' instead."
+            )
+            model = openai_model
+        else:
+            model = settings.get("user.model_default")  # type: ignore
+    return model
+
+
+def get_model_config(model_name: str) -> Optional[ModelConfig]:
+    """
+    Get the configuration for a specific model from the loaded configs
+    """
+    return model_configs.get(model_name)
+
+
 def messages_to_string(messages: list[GPTMessageItem]) -> str:
     """Format messages as a string"""
     formatted_messages = []
@@ -23,15 +97,6 @@ def messages_to_string(messages: list[GPTMessageItem]) -> str:
             formatted_messages.append("image")
         else:
             formatted_messages.append(message.get("text", ""))
-    return "\n\n".join(formatted_messages)
-
-
-def thread_to_string(chats: list[GPTMessage]) -> str:
-    """Format thread as a string"""
-    formatted_messages = []
-    for chat in chats:
-        formatted_messages.append(chat.get("role"))
-        formatted_messages.append(messages_to_string(chat.get("content", [])))
     return "\n\n".join(formatted_messages)
 
 
@@ -93,18 +158,28 @@ def format_clipboard() -> GPTMessageItem:
 def send_request(
     prompt: GPTMessageItem,
     content_to_process: Optional[GPTMessageItem],
-    tools: Optional[list[dict[str, str]]] = None,
+    model: str,
+    thread: str,
     destination: str = "",
-):
+) -> GPTMessageItem:
     """Generate run a GPT request and return the response"""
+    model = resolve_model_name(model)
+
+    continue_thread = thread == "continueLast"
+
     notification = "GPT Task Started"
     if len(GPTState.context) > 0:
         notification += ": Reusing Stored Context"
-    if GPTState.thread_enabled:
-        notification += ", Threading Enabled"
 
-    notify(notification)
-    TOKEN = get_token()
+    # Use specified model if provided
+    if model:
+        notification += f", Using model: {model}"
+
+    if settings.get("user.model_verbose_notifications"):
+        notify(notification)
+
+    # Get model configuration if available
+    config = get_model_config(model)
 
     language = actions.code.language()
     language_context = (
@@ -119,26 +194,26 @@ def send_request(
         else None
     )
 
-    system_messages: list[GPTMessageItem] = [
-        {"type": "text", "text": item}
-        for item in [
-            settings.get("user.model_system_prompt"),
-            language_context,
-            application_context,
-            snippet_context,
+    system_message = "\n\n".join(
+        [
+            item
+            for item in [
+                (
+                    config["system_prompt"]
+                    if config and "system_prompt" in config
+                    else settings.get("user.model_system_prompt")
+                ),
+                language_context,
+                application_context,
+                snippet_context,
+            ]
+            + actions.user.gpt_additional_user_context()
+            + [context.get("text") for context in GPTState.context]
+            if item
         ]
-        + actions.user.gpt_additional_user_context()
-        if item is not None
-    ]
+    )
 
-    system_messages += GPTState.context
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {TOKEN}",
-    }
-
-    content: list[GPTMessageItem] = []
+    content: list[GPTMessageItem] = [prompt]
     if content_to_process is not None:
         if content_to_process["type"] == "image_url":
             image = content_to_process
@@ -153,66 +228,178 @@ def send_request(
                 prompt["text"] + '\n\n"""' + content_to_process["text"] + '"""'  # type: ignore a Prompt has to be of type text
             )
             content = [prompt]
-    else:
-        # If there isn't any content to process,
-        # we just use the prompt and nothing else
-        content = [prompt]
 
-    current_request: GPTMessage = {
-        "role": "user",
-        "content": content,
-    }
+    request = GPTMessage(
+        role="user",
+        content=content,
+    )
 
-    data = {
-        "messages": [
-            format_messages("system", system_messages),
-        ]
-        + GPTState.thread
-        + [current_request],
-        "max_tokens": 2024,
-        "temperature": settings.get("user.model_temperature"),
-        "n": 1,
-        "model": settings.get("user.openai_model"),
-    }
-    if GPTState.debug_enabled:
-        print(data)
-    if tools is not None:
-        data["tools"] = tools
-
-    url: str = settings.get("user.model_endpoint")  # type: ignore
-    raw_response = requests.post(url, headers=headers, data=json.dumps(data))
-
-    match raw_response.status_code:
-        case 200:
-            notify("GPT Task Completed")
-            resp = raw_response.json()["choices"][0]["message"]["content"].strip()
-            formatted_resp = strip_markdown(resp)
-            response = format_message(formatted_resp)
-        case _:
-            notify("GPT Failure: Check the Talon Log")
-            raise Exception(raw_response.json())
-
-    if GPTState.thread_enabled:
-        GPTState.push_thread(current_request)
-        GPTState.push_thread(
-            {
-                "role": "assistant",
-                "content": [response],
-            }
+    model_endpoint: str = settings.get("user.model_endpoint")  # type: ignore
+    if model_endpoint == "llm":
+        response = send_request_to_llm_cli(
+            prompt, content_to_process, system_message, model, continue_thread
         )
+    else:
+        if continue_thread:
+            notify(
+                "Warning: Thread continuation is only supported when using setting user.model_endpoint = 'llm'"
+            )
+        response = send_request_to_api(request, system_message, model)
 
     return response
 
 
-def get_clipboard_image():
-    try:
-        clipped_image = clip.image()
-        if not clipped_image:
-            raise Exception("No image found in clipboard")
+def send_request_to_api(
+    request: GPTMessage, system_message: str, model: str
+) -> GPTMessageItem:
+    """Send a request to the model API endpoint and return the response"""
+    # Get model configuration if available
+    config = get_model_config(model)
 
-        data = clipped_image.encode().data()
-        base64_image = base64.b64encode(data).decode("utf-8")
-        return base64_image
+    # Use model_id from configuration if available
+    model_id = config["model_id"] if config and "model_id" in config else model
+
+    data = {
+        "messages": (
+            [
+                format_messages(
+                    "system",
+                    [GPTMessageItem(type="text", text=system_message)],
+                ),
+            ]
+            if system_message
+            else []
+        )
+        + [request],
+        "max_tokens": 2024,
+        "n": 1,
+        "model": model_id,
+    }
+
+    # Check for deprecated temperature setting
+    temperature: float = settings.get("user.model_temperature")  # type: ignore
+    if temperature != -1.0:
+        logging.warning(
+            "The setting 'user.model_temperature' is deprecated. Please configure temperature in models.json instead."
+        )
+        data["temperature"] = temperature
+
+    # Apply API options from configuration if available
+    if config and "api_options" in config:
+        data.update(config["api_options"])
+
+    if GPTState.debug_enabled:
+        print(data)
+
+    url: str = settings.get("user.model_endpoint")  # type: ignore
+    headers = {"Content-Type": "application/json"}
+    token = get_token()
+    # If the model endpoint is Azure, we need to use a different header
+    if "azure.com" in url:
+        headers["api-key"] = token
+    else:
+        headers["Authorization"] = f"Bearer {token}"
+
+    raw_response = requests.post(url, headers=headers, data=json.dumps(data))
+
+    match raw_response.status_code:
+        case 200:
+            if settings.get("user.model_verbose_notifications"):
+                notify("GPT Task Completed")
+            resp = raw_response.json()["choices"][0]["message"]["content"].strip()
+            formatted_resp = strip_markdown(resp)
+            return format_message(formatted_resp)
+        case _:
+            notify("GPT Failure: Check the Talon Log")
+            raise Exception(raw_response.json())
+
+
+def send_request_to_llm_cli(
+    prompt: GPTMessageItem,
+    content_to_process: Optional[GPTMessageItem],
+    system_message: str,
+    model: str,
+    continue_thread: bool,
+) -> GPTMessageItem:
+    """Send a request to the LLM CLI tool and return the response"""
+    # Get model configuration if available
+    config = get_model_config(model)
+
+    # Use model_id from configuration if available
+    model_id = config["model_id"] if config and "model_id" in config else model
+
+    # Build command
+    command: list[str] = [settings.get("user.model_llm_path")]  # type: ignore
+    if continue_thread:
+        command.append("-c")
+    command.append(prompt["text"])  # type: ignore
+    cmd_input: bytes | None = None
+    if content_to_process and content_to_process["type"] == "image_url":
+        img_url: str = content_to_process["image_url"]["url"]  # type: ignore
+        if img_url.startswith("data:"):
+            command.extend(["-a", "-"])
+            base64_data: str = img_url.split(",", 1)[1]
+            cmd_input = base64.b64decode(base64_data)
+        else:
+            command.extend(["-a", img_url])
+
+    # Add model option
+    command.extend(["-m", model_id])
+
+    # Check for deprecated temperature setting
+    temperature: float = settings.get("user.model_temperature")  # type: ignore
+    if temperature != -1.0:
+        logging.warning(
+            "The setting 'user.model_temperature' is deprecated. Please configure temperature in models.json instead."
+        )
+        command.extend(["-o", "temperature", str(temperature)])
+
+    # Apply llm_options from configuration if available
+    if config and "llm_options" in config:
+        for key, value in config["llm_options"].items():
+            if isinstance(value, bool):
+                if value:
+                    command.extend(["-o", key, "true"])
+                else:
+                    command.extend(["-o", key, "false"])
+            else:
+                command.extend(["-o", key, str(value)])
+
+    # Add system message if available
+    if system_message:
+        command.extend(["-s", system_message])
+
+    if GPTState.debug_enabled:
+        print(command)
+
+    # Configure output encoding
+    process_env = os.environ.copy()
+    if platform.system() == "Windows":
+        process_env["PYTHONUTF8"] = "1"  # For Python 3.7+ to enable UTF-8 mode
+    # On other platforms, UTF-8 is also the common/expected encoding.
+    output_encoding = "utf-8"
+
+    # Execute command and capture output.
+    try:
+        result = subprocess.run(
+            command,
+            input=cmd_input,
+            capture_output=True,
+            check=True,
+            creationflags=(
+                subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0  # type: ignore
+            ),
+            env=process_env if platform.system() == "Windows" else None,
+        )
+        if settings.get("user.model_verbose_notifications"):
+            notify("GPT Task Completed")
+        resp = result.stdout.decode(output_encoding).strip()
+        formatted_resp = strip_markdown(resp)
+        return format_message(formatted_resp)
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.decode(output_encoding).strip() if e.stderr else str(e)
+        notify(f"GPT Failure: {error_msg}")
+        raise e
     except Exception as e:
-        print(e)
-        raise Exception("Invalid image in clipboard")
+        notify("GPT Failure: Check the Talon Log")
+        raise e
